@@ -3,6 +3,8 @@ import pytest
 import pytest_asyncio
 from app.api.graphql_schema import schema
 from app.db.models import Base
+from app.db.session import AsyncSessionLocal
+from app.repository.user_repository import UserRepository
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
@@ -171,3 +173,33 @@ async def test_create_user_duplicate_email(override_session):
         # Adjust assertion based on your error handling
         data = response2.json()
         assert "errors" in data or response2.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_update_user_data(override_session):
+    """Test updating user data"""
+    mutation = """
+        mutation {
+            updateUser(userId: 1, userInput: {name: "Updated Name", password: "newpassword"}) {
+                id
+                name
+                email
+            }
+        }
+    """
+    transport = ASGITransport(app=test_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        response = await client.post("/graphql", json={"query": mutation})
+
+    assert response.status_code == 200
+
+    data = response.json()
+    assert "data" in data
+    assert "userUser" in data["data"]
+    assert data["data"]["userUser"]["name"] == "Updated Name"
+    assert data["data"]["userUser"]["email"] == "john@example.com"
+
+    # Check that password has been updated
+    async with AsyncSessionLocal() as session:
+        user = await UserRepository(session).get(1)
+        assert user.password != "password"

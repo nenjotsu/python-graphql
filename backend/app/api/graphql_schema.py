@@ -17,7 +17,6 @@ class User:
 @strawberry.input
 class CreateUserInput:
     name: str
-    email: str
     password: str
 
 
@@ -36,6 +35,12 @@ class Query:
             domain_user = await UserRepository(session).get(user_id)
             return to_graphql_user(domain_user) if domain_user else None
 
+    @strawberry.field
+    async def users(self) -> list[User]:
+        async with AsyncSessionLocal() as session:
+            domain_users = await UserRepository(session).get_all()
+            return [to_graphql_user(domain_user) for domain_user in domain_users]
+
 
 @strawberry.type
 class Mutation:
@@ -49,6 +54,21 @@ class Mutation:
             )
             created = await UserRepository(session).create(domain_user)
             return to_graphql_user(created)
+
+    @strawberry.mutation
+    async def update_user(self, user_id: int, user_input: CreateUserInput) -> User:
+        async with AsyncSessionLocal() as session:
+            domain_user = DomainUser(
+                name=user_input.name,
+                password=user_input.password,
+            )
+            updated = await UserRepository(session).update(user_id, domain_user)
+            return to_graphql_user(updated)
+
+    @strawberry.mutation
+    async def delete_user(self, user_id: int) -> bool:
+        async with AsyncSessionLocal() as session:
+            return await UserRepository(session).delete(user_id)
 
 
 schema = strawberry.Schema(query=Query, mutation=Mutation)
