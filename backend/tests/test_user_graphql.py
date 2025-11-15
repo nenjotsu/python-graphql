@@ -195,9 +195,10 @@ async def test_update_user_data(override_session):
         user_id = created_user["id"]
         update_mutation = """
               mutation ($userId: Int!) {
-                  updateUser(userId: $userId, userInput: {name: "Updated Name", password: "newpassword"}) {
+                  updateUser(userId: $userId, userInput: {name: "John Doe", password: "newpassword"}) {
                       id
                       name
+                      email
                   }
               }
           """
@@ -214,10 +215,51 @@ async def test_update_user_data(override_session):
 
         assert "data" in data
         assert "updateUser" in data["data"]
-        assert data["data"]["updateUser"]["name"] == "Updated Name"
-    # assert data["data"]["updateUser"]["email"] == "john@example.com"
+        assert data["data"]["updateUser"]["name"] == "John Doe"
+        assert data["data"]["updateUser"]["email"] == "jane@example.com"
 
-    # # Check that password has been updated
-    # async with AsyncSessionLocal() as session:
-    #     user = await UserRepository(session).get(1)
-    #     assert user.password != "password"
+        # # Check that password has been updated
+        # async with AsyncSessionLocal() as session:
+        #     user = await UserRepository(session).get(1)
+        #     assert user.password != "password"
+
+
+@pytest.mark.asyncio
+async def test_delete_user_data(override_session):
+    """Test updating user data"""
+    # First create a user
+    create_mutation = """
+        mutation {
+            createUser(userInput: {name: "Jane Doe", email: "jane@example.com", password: "password"}) {
+                id
+                name
+                email
+            }
+        }
+    """
+
+    transport = ASGITransport(app=test_app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        create_response = await client.post("/graphql", json={"query": create_mutation})
+
+        created_user = create_response.json()["data"]["createUser"]
+        user_id = created_user["id"]
+        update_mutation = """
+              mutation ($userId: Int!) {
+                  deleteUser(userId: $userId)
+              }
+          """
+        variables = {"userId": user_id}
+        transport = ASGITransport(app=test_app)
+        async with AsyncClient(transport=transport, base_url="http://test") as client:
+            response = await client.post(
+                "/graphql", json={"query": update_mutation, "variables": variables}
+            )
+
+        assert response.status_code == 200
+
+        data = response.json()
+
+        assert "data" in data
+        assert "deleteUser" in data["data"]
+        assert data["data"]["deleteUser"]
