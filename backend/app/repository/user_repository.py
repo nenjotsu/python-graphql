@@ -34,14 +34,28 @@ class UserRepository:
         return [User.model_validate(orm_user) for orm_user in orm_users]
 
     async def update(self, user_id: int, user_input: UserUpdate) -> Optional[User]:
-        orm_user = await self.get(user_id)
-        if not orm_user:
+        print(f"Type of user_input: {type(user_input)}")  # Should be UserUpdate
+        print(f"user_input: {user_input}")
+        print(f"Has model_dump: {hasattr(user_input, 'model_dump')}")  # Should be True
+
+        result = await self.session.execute(
+            select(UserORM).where(UserORM.id == user_id)
+        )
+        orm_user = result.scalar_one_or_none()
+
+        if orm_user is None:
             return None
-        orm_user.name = user_input.name
-        orm_user.password = user_input.password
+
+        # Get only fields that were actually provided (exclude_unset=True)
+        update_data = user_input.model_dump(exclude_unset=True)
+
+        # Update only provided fields
+        for key, value in update_data.items():
+            setattr(orm_user, key, value)
+
         await self.session.commit()
         await self.session.refresh(orm_user)
-        return UserUpdate.model_validate(orm_user)
+        return User.model_validate(orm_user)
 
     async def delete(self, user_id: int) -> bool:
         orm_user = await self.get(user_id)
